@@ -1,0 +1,144 @@
+---
+title: "Machine Learning Project"
+author: "AAleid"
+date: "December 7, 2018"
+output: html_document
+---
+###Background and Objective
+
+####Activity trackers are commonly used now.They measure body movements at certain patterns to detect certain types of activities. In this report, the quality of these types of activities will be studied and predicted, using  data obtained from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. 
+
+###Loading Libraries
+
+```{r}
+library(caret)
+library(rpart)
+library(rattle)
+library(randomForest)
+library(gbm)
+
+```
+
+
+###Importing Data
+```{r, cache=TRUE}
+train<-read.csv(url ("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"))
+
+test<-read.csv(url("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"))
+
+#cleaning data
+train<- train[, colSums(is.na(train)) == 0]
+Remove <- which(colSums(is.na(train)|train=="")>0.9*dim(train)[1]) 
+train <- train[,-Remove]
+
+
+train<- train[, -c(1:7)]
+              
+              
+
+Remove1 <- which(colSums(is.na(test) |test=="")>0.9*dim(test)[1]) 
+test <- test[,-Remove1]
+
+
+test<- test[, -1]
+
+dim(train)
+dim(test)
+
+
+
+set.seed(1234)
+training <- createDataPartition(train$classe, p=0.6, list=FALSE)
+trainingset <- train[training, ]
+testingset <- train[-training, ]
+dim(trainingset)
+dim(testingset)
+
+```
+
+
+#### To enhance the performance of our model, we will use 10 folds cross validation
+#### We will use:
+- classification tree
+- random forest
+- gradient boosting method
+
+
+###1.Classification Tree
+```{r, cache=TRUE}
+
+cv<-trainControl(method="cv", number=10)
+CT <- train(classe~., data=trainingset, method="rpart")
+fancyRpartPlot(CT$finalModel)
+```
+
+####Validate our model with the test set
+```{r, cache=TRUE}
+predic <- predict(CT,newdata=testingset)
+
+conf <- confusionMatrix(testingset$classe,predic)
+
+conf
+conf$table
+conf$overall[1]
+```
+#### the accuracy is 49% (low)
+
+***
+
+###2. Random Forest
+```{r, cache=TRUE}
+
+
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+
+modRF1 <- train(classe ~ ., data=trainingset, method="rf", trControl=controlRF)
+
+modRF1$finalModel
+```
+
+####Validate our model with the test set
+```{r, cache=TRUE}
+
+
+predictRF <- predict(modRF1, newdata=testingset)
+cmRF <- confusionMatrix(predictRF, testingset$classe)
+cmRF
+
+
+```
+
+####Accuracy is 99.1%
+
+```{r}
+plot(modRF1)
+
+plot(cmRF$table, col = cmRF$byClass, main = paste("Random Forest Accuracy ", round(cmRF$overall['Accuracy'], 4)))
+```
+
+###3. gradient boosting method
+```{r, cache=TRUE}
+set.seed(12345)
+controlG <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modG  <- train(classe ~ ., data=trainingset, method = "gbm", trControl = controlG, verbose = FALSE)
+modG$finalModel
+print(modG)
+```
+
+####Validate our model with the test set
+```{r}
+predictG <- predict(modG, newdata=testingset)
+cmG <- confusionMatrix(predictG, testingset$classe)
+cmG
+```
+
+####Accuracy is 96.2%
+***
+
+*the highest accuracy is RANDOM FOREST, so it will be used to validate the data
+
+```{r}
+final<-predict(modRF1, newdata = test)
+final
+```
+
